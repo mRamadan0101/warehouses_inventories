@@ -1,66 +1,317 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+## Warehouse Inventories API Documentation
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+RESTful API for managing stock across warehouses, listing item quantities, and handling stock transfers with low-stock alerts.
 
-## About Laravel
+### Base URL
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- **Local**: `http://localhost:8000`
+- **API Prefix**: all routes are under `api`, e.g. `http://localhost:8000/api/login`
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+---
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Authentication
 
-## Learning Laravel
+- The API uses **Laravel Sanctum**.
+- After a successful login, an **access token** is generated and must be sent with every protected request.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+### Required Headers
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+- **Authorization**: `Bearer {token}`
+- **Accept**: `application/json`
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### Standard Response Format
 
-## Laravel Sponsors
+All responses are wrapped using `ApiResponseHelper` with a consistent structure:
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+- **Success responses**:
 
-### Premium Partners
+```json
+{
+  "status": "success",
+  "message": "Login successful",
+  "code": 200,
+  "data": { ... }
+}
+```
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+- **Error responses**:
 
-## Contributing
+```json
+{
+  "status": "error",
+  "message": "Invalid credentials",
+  "code": 401
+}
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+---
 
-## Code of Conduct
+## Endpoints Summary
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+- **POST** `/api/login`  
+  Authenticate a user and retrieve an access token.
 
-## Security Vulnerabilities
+- **GET** `/api/inventory`  
+  List inventory for all warehouses with filtering and pagination.
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+- **GET** `/api/warehouses/{id}/inventory`  
+  Get detailed inventory for a single warehouse.
 
-## License
+- **POST** `/api/stock-transfers`  
+  Create a stock transfer between two warehouses (requires `admin` role).
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+> Note: all routes except `/login` require `Authorization: Bearer {token}`.
+
+---
+
+## 1. Login
+
+- **URL**: `/api/login`
+- **Method**: `POST`
+- **Auth**: no token required.
+
+### Request Body
+
+```json
+{
+  "email": "user@example.com",
+  "password": "secret"
+}
+```
+
+**Validation** (`LoginRequest`):
+- `email`: `required|email|exists:users,email`
+- `password`: `required|string`
+
+### Successful Response
+
+```json
+{
+  "status": "success",
+  "message": "Login successful",
+  "code": 200,
+  "data": {
+    "id": 1,
+    "name": "Admin",
+    "email": "admin@example.com",
+    "role": {
+      "id": 1,
+      "name": "admin",
+      "permissions": [ ... ]
+    },
+    "token": "1|xxxxxxxxxxxxxxxxxxxxxxxx"
+  }
+}
+```
+
+Use the `data.token` value in the `Authorization` header:
+
+```http
+Authorization: Bearer 1|xxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+---
+
+## 2. Get Inventory (كل المخازن)
+## 2. Get Inventory (all warehouses)
+
+- **URL**: `/api/inventory`
+- **Method**: `GET`
+- **Auth**: requires token (Sanctum).
+
+### Query Parameters (optional)
+
+- `per_page` (int, default 10): items per page.
+- `page` (int, default 1): page number.
+- `warehouse_id` (int): filter by a specific warehouse.
+- `name` (string): filter by item name.
+- `price_from` (float): minimum item price.
+- `price_to` (float): maximum item price.
+
+### Example Request
+
+`GET /api/inventory?per_page=10&page=1&name=iphone&price_from=1000&price_to=5000`
+
+### Successful Response (مقتطف)
+### Successful Response (excerpt)
+
+```json
+{
+  "status": "success",
+  "code": 200,
+  "data": [
+    {
+      "id": 1,
+      "name": "Main Warehouse",
+      "items": [
+        {
+          "id": 10,
+          "name": "Item A",
+          "description": "Item description",
+          "price": 120.5,
+          "sku": "SKU-001",
+          "quantity": 50,
+          "inventory_details": [
+            {
+              "id": 100,
+              "warehouse_id": 1,
+              "item_id": 10,
+              "quantity": 50,
+              "alert_level": 10
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+`data` is a collection of `WarehouseResource` using `WarehouseResourceCollection`.
+
+---
+
+## 3. Get Warehouse Inventory (single warehouse)
+
+- **URL**: `/api/warehouses/{id}/inventory`
+- **Method**: `GET`
+- **Auth**: requires token.
+
+### URL Parameters
+
+- `id` (int): warehouse ID.
+
+### Query Parameters (optional)
+
+- `name` (string): filter by item name.
+- `price_from` (float)
+- `price_to` (float)
+
+### Example Request
+
+`GET /api/warehouses/1/inventory?name=keyboard`
+
+### Successful Response (excerpt)
+
+```json
+{
+  "status": "success",
+  "code": 200,
+  "data": {
+    "id": 1,
+    "name": "Main Warehouse",
+    "items": [
+      {
+        "id": 5,
+        "name": "Keyboard",
+        "description": "Mechanical keyboard",
+        "price": 300,
+        "sku": "KB-001",
+        "quantity": 20,
+        "inventory_details": [
+          {
+            "id": 200,
+            "warehouse_id": 1,
+            "item_id": 5,
+            "quantity": 20,
+            "alert_level": 5
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+---
+
+## 4. Stock Transfer (between warehouses)
+
+- **URL**: `/api/stock-transfers`
+- **Method**: `POST`
+- **Auth**:
+  - requires token.
+  - requires `admin` role via `has_role:admin` middleware.
+
+### Request Body
+
+```json
+{
+  "from_warehouse_id": 1,
+  "to_warehouse_id": 2,
+  "item_id": 10,
+  "quantity": 5
+}
+```
+
+**Validation** (`StocktransferRequest`):
+
+- `from_warehouse_id`: `required|exists:warehouses,id`
+- `to_warehouse_id`: `required|exists:warehouses,id|different:from_warehouse_id`
+- `item_id`: `required|exists:items,id`
+- `quantity`: `required|integer|min:1`
+
+### Business Rules
+
+- Check that the source warehouse (`from_warehouse_id`) has enough stock in `ItemInventory`.
+- Decrement quantity from the source warehouse and increment it in the destination warehouse.
+- If the remaining quantity in the source warehouse is less than or equal to `alert_level`, the `LowStockDetected` event is dispatched.
+
+### Successful Response
+
+```json
+{
+  "status": "success",
+  "message": "Transfer completed successfully",
+  "code": 201,
+  "data": {
+    "id": 1,
+    "from_warehouse_id": 1,
+    "to_warehouse_id": 2,
+    "item_id": 10,
+    "quantity": 5,
+    "user_id": 1,
+    "type": "transfer",
+    "created_at": "2026-03-11T10:00:00Z",
+    "updated_at": "2026-03-11T10:00:00Z"
+  }
+}
+```
+
+### Error Responses
+
+- **Insufficient stock**:
+
+```json
+{
+  "status": "error",
+  "message": "Insufficient stock",
+  "code": 400
+}
+```
+
+---
+
+## Error Handling & Status Codes
+
+- `200` – Successful read operations (GET, login).
+- `201` – Resource created successfully (stock transfer).
+- `400` – Bad request (e.g. insufficient stock, invalid input).
+- `401` – Authentication failed (missing/invalid token or bad credentials).
+- `403` – Forbidden (user does not have the required role/permissions).
+- `404` – Resource not found (e.g. warehouse not found).
+
+---
+
+## Quick Start (Postman / Insomnia)
+
+1. Call `POST /api/login` to obtain a token.
+2. Add headers:  
+   - `Authorization: Bearer {token}`  
+   - `Accept: application/json`
+3. Test:
+   - `GET /api/inventory`
+   - `GET /api/warehouses/{id}/inventory`
+   - `POST /api/stock-transfers` with valid payload.
+
+This `README.md` serves as the main reference for the warehouse inventories API.
