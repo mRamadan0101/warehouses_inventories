@@ -112,7 +112,6 @@ Authorization: Bearer 1|xxxxxxxxxxxxxxxxxxxxxxxx
 
 ---
 
-## 2. Get Inventory (كل المخازن)
 ## 2. Get Inventory (all warehouses)
 
 - **URL**: `/api/inventory`
@@ -132,7 +131,6 @@ Authorization: Bearer 1|xxxxxxxxxxxxxxxxxxxxxxxx
 
 `GET /api/inventory?per_page=10&page=1&name=iphone&price_from=1000&price_to=5000`
 
-### Successful Response (مقتطف)
 ### Successful Response (excerpt)
 
 ```json
